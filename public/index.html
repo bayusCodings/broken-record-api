@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Admin Panel</title>
+    <style>
+        body {
+            font-family: "Arial", sans-serif;
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+        }
+
+        .form-container, .table-container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        input, select {
+            flex: 1;
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .input-container {
+            position: relative;
+            flex: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-container input {
+            width: 100%;
+            padding-right: 25px;
+        }
+
+        .clear-btn {
+            position: absolute;
+            right: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            color: #888;
+            display: none;
+        }
+
+        .input-container input:not(:placeholder-shown) + .clear-btn {
+            display: inline;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            font-size: 15px;
+            background-color: #f4f4f4;
+        }
+
+        td {
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-evenly;
+            margin-top: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            min-width: 400px;
+        }
+        .close {
+            cursor: pointer;
+            float: right;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Record Admin Panel</h1>
+
+    <!-- Records Table -->
+    <div id="recordsContainer" class="table-container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Records</h2>
+            <button id="viewOrdersBtn" onclick="switchTab('orders')">View Orders</button>
+        </div>
+
+        <div class="filter-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+            <div style="display: flex; gap: 10px; position: relative;">
+                <select id="filterFormat" style="flex: 1;">
+                    <option value="">All Formats</option>
+                    <option value="Vinyl">Vinyl</option>
+                    <option value="CD">CD</option>
+                    <option value="Cassette">Cassette</option>
+                    <option value="Digital">Digital</option>
+                </select>
+                <select id="filterCategory" style="flex: 1;">
+                    <option value="">All Categories</option>
+                    <option value="Rock">Rock</option>
+                    <option value="Jazz">Jazz</option>
+                    <option value="Hip-Hop">Hip-Hop</option>
+                    <option value="Classical">Classical</option>
+                    <option value="Pop">Pop</option>
+                    <option value="Alternative">Alternative</option>
+                    <option value="Indie">Indie</option>
+                </select>
+                <div class="input-container">
+                    <input type="text" id="filterArtist" placeholder="Artist" style="flex: 1;">
+                    <span class="clear-btn" onclick="clearInput('filterArtist')">&times;</span>
+                </div>
+            </div>
+        
+            <div style="display: flex; gap: 10px;">
+                <div class="input-container">
+                    <input type="text" id="searchQuery" placeholder="Search across [artist, album, categories]" style="flex: 1;">
+                    <span class="clear-btn" onclick="clearInput('searchQuery')">&times;</span>
+                </div>
+                <div class="input-container">
+                    <input type="text" id="filterAlbum" placeholder="Album" style="flex: 1;">
+                    <span class="clear-btn" onclick="clearInput('filterAlbum')">&times;</span>
+                </div>
+                <button onclick="applyFilters()">Filter</button>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Artist</th>
+                    <th>Album</th>
+                    <th>Price</th>
+                    <th>Qty</th>
+                    <th>Format</th>
+                    <th>Category</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="recordTableBody">
+                <!-- Records will be inserted here -->
+            </tbody>
+        </table>
+
+        <div class="pagination">
+            <button id="prevPage" onclick="changePage(-1)" disabled>Previous</button>
+            <span id="currentPage">Page 1</span>
+            <button id="nextPage" onclick="changePage(1)" disabled>Next</button>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div id="ordersContainer" class="table-container" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Orders</h2>
+            <button id="viewRecordsBtn" onclick="switchTab('records')">View Records</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Artist</th>
+                    <th>Album</th>
+                    <th>Format</th>
+                    <th>Qty</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+                <!-- Orders will be inserted here -->
+            </tbody>
+        </table>
+    
+        <div class="pagination">
+            <button id="prevOrderPage" onclick="changeOrderPage(-1)" disabled>Previous</button>
+            <span id="currentOrderPage">Page 1</span>
+            <button id="nextOrderPage" onclick="changeOrderPage(1)" disabled>Next</button>
+        </div>
+    </div>
+
+    <!-- Create Record Form -->
+    <div id="createRecordsContainer" class="form-container">
+        <h2>Create Record</h2>
+        <div class="form-group">
+            <input type="text" id="artist" placeholder="Artist" required>
+            <input type="text" id="album" placeholder="Album" required>
+            <input type="number" id="price" placeholder="Price" min="0" max="10000" required>
+        </div>
+        <div class="form-group">
+            <input type="number" id="qty" placeholder="Quantity" min="0" max="100" required>
+            <select id="format">
+                <option value="Vinyl">Vinyl</option>
+                <option value="CD">CD</option>
+                <option value="Cassette">Cassette</option>
+                <option value="Digital">Digital</option>
+            </select>
+            <select id="category">
+                <option value="Rock">Rock</option>
+                <option value="Jazz">Jazz</option>
+                <option value="Hip-Hop">Hip-Hop</option>
+                <option value="Classical">Classical</option>
+                <option value="Pop">Pop</option>
+                <option value="Alternative">Alternative</option>
+                <option value="Indie">Indie</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <input type="text" id="mbid" placeholder="MusicBrainz ID (Optional)">
+            <button onclick="createRecord()">Create</button>
+        </div>
+    </div>
+
+    <!-- Update Record Modal -->
+    <div id="updateModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeUpdateModal()">&times;</span>
+            <h3>Update Record</h3>
+            <div class="form-group">
+                <input type="hidden" id="updateId">
+                <input type="text" id="updateArtist" placeholder="Artist" required>
+                <input type="text" id="updateAlbum" placeholder="Album" required>
+                <input type="number" id="updatePrice" placeholder="Price" min="0" max="10000" required>
+            </div>
+            <div class="form-group">
+                <input type="number" id="updateQty" placeholder="Quantity" min="0" max="100" required>
+                <select id="updateFormat">
+                    <option value="Vinyl">Vinyl</option>
+                    <option value="CD">CD</option>
+                    <option value="Cassette">Cassette</option>
+                    <option value="Digital">Digital</option>
+                </select>
+                <select id="updateCategory">
+                    <option value="Rock">Rock</option>
+                    <option value="Jazz">Jazz</option>
+                    <option value="Hip-Hop">Hip-Hop</option>
+                    <option value="Classical">Classical</option>
+                    <option value="Pop">Pop</option>
+                    <option value="Alternative">Alternative</option>
+                    <option value="Indie">Indie</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <input type="text" id="updateMbid" placeholder="MusicBrainz ID (Optional)">
+            </div>
+            <button onclick="updateRecord()">Update</button>
+        </div>
+    </div>
+
+    <div id="successModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeSuccessModal()">&times;</span>
+            <p>Record created successfully!</p>
+            <button onclick="closeSuccessModal()">OK</button>
+        </div>
+    </div>
+
+    <div id="tracklistModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeTracklistModalModal()">&times;</span>
+            <h3>Tracklist</h3>
+            <ul id="tracklist"></ul>
+        </div>
+    </div>
+
+    <!-- Create Order Modal -->
+    <div id="orderModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeOrderModal()">&times;</span>
+            <h3>Order Record: <span id="orderRecordName"></span></h3>
+            <input type="hidden" id="orderRecordId">
+            <div class="form-group">
+                <input type="number" id="orderQuantity" placeholder="Quantity" min="1" max="100" required>
+            </div>
+            <button onclick="submitOrder()">Place Order</button>
+        </div>
+    </div>
+
+    <div id="orderSuccessModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeOrderSuccessModal()">&times;</span>
+            <p>Order placed successfully!</p>
+            <button onclick="closeOrderSuccessModal()">OK</button>
+        </div>
+    </div>
+
+    <script>
+        let page = 1, totalPages = 1;
+        let orderPage = 1, orderTotalPages = 1;
+        const size = 10;
+
+        function formatDate(isoString) {
+            const date = new Date(isoString);
+
+            const options = {
+                year: "numeric",
+                month: "long",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true,
+            };
+
+            return date.toLocaleString("en-US", options);
+        }
+
+        function showTracklist(tracklist) {
+            const tracklistElement = document.getElementById("tracklist");
+            tracklistElement.innerHTML = "";
+            if (tracklist.length === 0) {
+                tracklistElement.innerHTML = "<li>No tracklist found.</li>";
+            } else {
+                tracklist.forEach(track => {
+                    const li = document.createElement("li");
+                    const minutes = Math.floor(track.length / 60000);
+                    const seconds = ((track.length % 60000) / 1000).toFixed(0);
+                    const formattedLength = `${minutes}:${seconds.padStart(2, '0')}`;
+                    li.textContent = `${track.position}. ${track.title} (${formattedLength}) - ${track.firstReleaseDate}`;
+                    tracklistElement.appendChild(li);
+                });
+            }
+            document.getElementById("tracklistModal").style.display = "flex";
+        }
+
+        function closeTracklistModalModal() {
+            document.getElementById("tracklistModal").style.display = "none";
+        }
+
+        function showSuccessModal() {
+            document.getElementById("successModal").style.display = "flex";
+        }
+
+        function closeSuccessModal() {
+            document.getElementById("successModal").style.display = "none";
+        }
+
+        function openUpdateModal(record) {
+            document.getElementById("updateId").value = record._id;
+            document.getElementById("updateArtist").value = record.artist;
+            document.getElementById("updateAlbum").value = record.album;
+            document.getElementById("updatePrice").value = record.price;
+            document.getElementById("updateQty").value = record.qty;
+            document.getElementById("updateFormat").value = record.format;
+            document.getElementById("updateCategory").value = record.category;
+            document.getElementById("updateMbid").value = record.mbid || '';
+
+            document.getElementById("updateModal").style.display = "flex";
+        }
+
+        function closeUpdateModal() {
+            document.getElementById("updateModal").style.display = "none";
+        }
+
+        function openOrderModal(record) {
+            document.getElementById("orderRecordName").innerText 
+                = `${record.artist} - ${record.album} (${record.format})`;
+            document.getElementById("orderRecordId").value = record._id;
+            document.getElementById("orderQuantity").value = "";
+            document.getElementById("orderModal").style.display = "flex";
+        }
+
+        function closeOrderModal() {
+            document.getElementById("orderModal").style.display = "none";
+        }
+
+        async function applyFilters() {
+            const query = document.getElementById("searchQuery").value;
+            const artist = document.getElementById("filterArtist").value;
+            const album = document.getElementById("filterAlbum").value;
+            const format = document.getElementById("filterFormat").value;
+            const category = document.getElementById("filterCategory").value;
+
+            let url = `/records?page=${page}&size=${size}`;
+            if (query) url += `&q=${encodeURIComponent(query)}`;
+            if (artist) url += `&artist=${encodeURIComponent(artist)}`;
+            if (album) url += `&album=${encodeURIComponent(album)}`;
+            if (format) url += `&format=${encodeURIComponent(format)}`;
+            if (category) url += `&category=${encodeURIComponent(category)}`;
+
+            await fetchRecords(url);
+        }
+
+        async function clearInput(inputId) {
+            document.getElementById(inputId).value = "";
+            await applyFilters()
+        }
+
+        async function fetchRecords(urlParam) {
+            const url = (urlParam) ? urlParam : `/records?page=${page}&size=${size}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            const tableBody = document.getElementById("recordTableBody");
+            tableBody.innerHTML = "";
+
+            data.data.forEach(record => {
+                const row = `<tr>
+                    <td onclick='showTracklist(${JSON.stringify(record.tracklist)})'>${record.artist}</td>
+                    <td onclick='showTracklist(${JSON.stringify(record.tracklist)})'>${record.album}</td>
+                    <td onclick='showTracklist(${JSON.stringify(record.tracklist)})'>$${record.price}</td>
+                    <td onclick='showTracklist(${JSON.stringify(record.tracklist)})'>${record.qty}</td>
+                    <td onclick='showTracklist(${JSON.stringify(record.tracklist)})'>${record.format}</td>
+                    <td onclick='showTracklist(${JSON.stringify(record.tracklist)})'>${record.category}</td>
+                    <td>
+                        <button onclick='openUpdateModal(${JSON.stringify(record)})'>Edit</button>
+                        <button onclick='openOrderModal(${JSON.stringify(record)})'>Order</button>
+                    </td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+
+            if (data.data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 10px;">
+                            No records found
+                        </td>
+                    </tr>`;
+            }
+
+            totalPages = Math.ceil(data.pagination.total / size);
+            document.getElementById("currentPage").innerText = `Page ${page}`;
+            document.getElementById("prevPage").disabled = page <= 1;
+            document.getElementById("nextPage").disabled = page >= totalPages;
+        }
+
+        async function changePage(change) {
+            page += change;
+            await fetchRecords();
+        }
+
+        function showOrderSuccessModal() {
+            document.getElementById("orderSuccessModal").style.display = "flex";
+        }
+
+        function closeOrderSuccessModal() {
+            document.getElementById("orderSuccessModal").style.display = "none";
+        }
+
+        async function createRecord() {
+            const artist = document.getElementById("artist").value;
+            const album = document.getElementById("album").value;
+            const price = document.getElementById("price").value;
+            const qty = document.getElementById("qty").value;
+            const format = document.getElementById("format").value;
+            const category = document.getElementById("category").value;
+            const mbid = document.getElementById("mbid").value || null;
+
+            const record = { artist, album, price, qty, format, category, mbid };
+
+            try {
+                const response = await fetch("/records", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(record),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || "Failed to create record.");
+                }
+
+                showSuccessModal();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+
+                // Clear input fields
+                document.getElementById("artist").value = "";
+                document.getElementById("album").value = "";
+                document.getElementById("price").value = "";
+                document.getElementById("qty").value = "";
+                document.getElementById("mbid").value = "";
+
+                page = 1; // return to first page
+                await fetchRecords(); // Refresh table
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function updateRecord() {
+            const id = document.getElementById("updateId").value;
+            const artist = document.getElementById("updateArtist").value;
+            const album = document.getElementById("updateAlbum").value;
+            const price = document.getElementById("updatePrice").value;
+            const qty = document.getElementById("updateQty").value;
+            const format = document.getElementById("updateFormat").value;
+            const category = document.getElementById("updateCategory").value;
+            const mbid = document.getElementById("updateMbid").value || null;
+
+            const updatedRecord = { artist, album, price, qty, format, category, mbid };
+
+            try {
+                const response = await fetch(`/records/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatedRecord),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || "Failed to update record.");
+                }
+
+                closeUpdateModal();
+                await fetchRecords(); // Refresh table
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function submitOrder() {
+            const recordId = document.getElementById("orderRecordId").value;
+            const quantity = document.getElementById("orderQuantity").value;
+
+            try {
+                const response = await fetch("/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ recordId, quantity }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || "Failed to place order.");
+                }
+
+                closeOrderModal();
+                showOrderSuccessModal();
+                await fetchRecords(); // Refresh table
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        async function fetchOrders() {
+            const url = `/orders?page=${orderPage}&size=${size}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            const tableBody = document.getElementById("ordersTableBody");
+            tableBody.innerHTML = "";
+
+            data.data.forEach(order => {
+                const row = `<tr>
+                    <td>${order?.recordId?.artist}</td>
+                    <td>${order?.recordId?.album}</td>
+                    <td>${order?.recordId?.format}</td>
+                    <td>${order.quantity}</td>
+                    <td>${formatDate(order.createdAt)}</td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+
+            if (data.data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 10px;">
+                            No orders found
+                        </td>
+                    </tr>`;
+            }
+
+            orderTotalPages = Math.ceil(data.pagination.total / size);
+            document.getElementById("currentOrderPage").innerText = `Page ${orderPage}`;
+            document.getElementById("prevOrderPage").disabled = page <= 1;
+            document.getElementById("nextOrderPage").disabled = page >= orderTotalPages;
+        }
+
+        async function switchTab(tab) {
+            if (tab === 'records') {
+                document.getElementById('recordsContainer').style.display = 'block';
+                document.getElementById('createRecordsContainer').style.display = 'block';
+                document.getElementById('ordersContainer').style.display = 'none';
+            }
+            else {
+                await fetchOrders();
+                document.getElementById('ordersContainer').style.display = 'block';
+                document.getElementById('recordsContainer').style.display = 'none';
+                document.getElementById('createRecordsContainer').style.display = 'none';
+            }
+        }
+
+        async function changeOrderPage(change) {
+            orderPage += change;
+            await fetchOrders();
+        }
+
+        fetchRecords();
+    </script>
+</body>
+</html>
