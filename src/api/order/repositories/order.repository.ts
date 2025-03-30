@@ -66,6 +66,6 @@ export class OrderRepository {
   }
 
   async deleteMany(): Promise<void> {
-    await this.orderModel.deleteMany()
+    await this.orderModel.deleteMany();
   }
 }

@@ -71,7 +71,7 @@ describe('RecordService', () => {
   });
 
   describe('createRecord', () => {
-    const recordData: CreateRecordRequestDTO = {
+    const recordData = {
       artist: 'The Beatles',
       album: 'Abbey Road',
       price: 25,
@@ -80,36 +80,110 @@ describe('RecordService', () => {
       category: RecordCategory.ROCK,
     };
 
-    it('should create a record only if MBID is not provided', async () => {
+    const mockTracklist = [
+      {
+        title: 'Track 1',
+        length: 180000,
+        position: 1,
+        firstReleaseDate: '2009-01-01',
+      },
+    ] as Track[];
+
+    it('should create record without tracklist if MBID is not provided', async () => {
+      const request: CreateRecordRequestDTO = { ...recordData };
       const recordId = 'recordId123';
-      const createdRecord = { ...recordData, _id: recordId } as Record;
+      const createdRecord = {
+        ...recordData,
+        _id: recordId,
+      } as Record;
 
-      jest.spyOn(recordService, 'handleTracklistUpdate').mockResolvedValue([]);
       jest.spyOn(recordRepository, 'create').mockResolvedValue(createdRecord);
-      const result = await recordService.createRecord(recordData);
+      const result = await recordService.createRecord(request);
 
-      expect(recordRepository.create).toHaveBeenCalledWith(recordData);
-      expect(recordService.handleTracklistUpdate).not.toHaveBeenCalled();
+      expect(recordRepository.create).toHaveBeenCalledWith(request);
+      expect(recordCache.getTracklist).not.toHaveBeenCalled();
+      expect(musicBrainzService.fetchTrackList).not.toHaveBeenCalled();
+      expect(recordCache.setTracklist).not.toHaveBeenCalled();
       expect(recordCache.clearRecords).toHaveBeenCalled();
       expect(result).toEqual(asApiResponse(createdRecord));
     });
 
-    it('should create a record and update tracklist if MBID is provided', async () => {
+    it('should create record and update tracklist if valid MBID is provided', async () => {
       const mbid = 'mbid-12345';
-      const recordDataMBID = { ...recordData, mbid };
+      const request = { ...recordData, mbid };
       const recordId = 'recordId123';
-      const createdRecord = { ...recordDataMBID, _id: recordId } as Record;
+      const createdRecord = {
+        ...request,
+        _id: recordId,
+        tracklist: mockTracklist,
+        mbid,
+      } as Record;
 
-      jest.spyOn(recordService, 'handleTracklistUpdate').mockResolvedValue([]);
+      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
+      jest
+        .spyOn(musicBrainzService, 'fetchTrackList')
+        .mockResolvedValue(mockTracklist);
       jest.spyOn(recordRepository, 'create').mockResolvedValue(createdRecord);
 
-      const result = await recordService.createRecord(recordDataMBID);
+      const result = await recordService.createRecord(request);
+
+      expect(recordRepository.create).toHaveBeenCalledWith({
+        ...request,
+        tracklist: mockTracklist,
+      });
+      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
+      expect(musicBrainzService.fetchTrackList).toHaveBeenCalledWith(mbid);
+      expect(recordCache.setTracklist).toHaveBeenCalled();
+      expect(recordCache.clearRecords).toHaveBeenCalled();
+      expect(result).toEqual(asApiResponse(createdRecord));
+    });
+
+    it('should fetch cached tracklist if it exists and create record if valid MBID is provided', async () => {
+      const mbid = 'mbid-12345';
+      const request = { ...recordData, mbid };
+      const recordId = 'recordId123';
+      const createdRecord = {
+        ...request,
+        _id: recordId,
+        tracklist: mockTracklist,
+        mbid,
+      } as Record;
+
+      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(mockTracklist);
+      jest.spyOn(recordRepository, 'create').mockResolvedValue(createdRecord);
+
+      const result = await recordService.createRecord(request);
+
+      expect(recordRepository.create).toHaveBeenCalledWith({
+        ...request,
+        tracklist: mockTracklist,
+      });
+      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
+      expect(musicBrainzService.fetchTrackList).not.toHaveBeenCalledWith(mbid);
+      expect(recordCache.setTracklist).not.toHaveBeenCalled();
+      expect(recordCache.clearRecords).toHaveBeenCalled();
+      expect(result).toEqual(asApiResponse(createdRecord));
+    });
+
+    it('should create record without mbid and tracklist if invalid MBID is provided', async () => {
+      const mbid = 'mbid-invalid';
+      const request = { ...recordData, mbid };
+      const recordId = 'recordId123';
+      const createdRecord = {
+        ...recordData,
+        _id: recordId,
+      } as Record;
+
+      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
+      jest.spyOn(musicBrainzService, 'fetchTrackList').mockResolvedValue([]);
+      jest.spyOn(recordRepository, 'create').mockResolvedValue(createdRecord);
+
+      const result = await recordService.createRecord(request);
 
       expect(recordRepository.create).toHaveBeenCalledWith(recordData);
-      expect(recordService.handleTracklistUpdate).toHaveBeenCalledWith(
-        recordId,
-        mbid,
-      );
+      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
+      expect(musicBrainzService.fetchTrackList).toHaveBeenCalledWith(mbid);
+      expect(recordCache.setTracklist).not.toHaveBeenCalled();
       expect(recordCache.clearRecords).toHaveBeenCalled();
       expect(result).toEqual(asApiResponse(createdRecord));
     });
@@ -158,16 +232,22 @@ describe('RecordService', () => {
       category: RecordCategory.ROCK,
     };
 
-    it('should update record only if MBID is not provided', async () => {
+    const mockTracklist = [
+      {
+        title: 'Track 1',
+        length: 180000,
+        position: 1,
+        firstReleaseDate: '2009-01-01',
+      },
+    ] as Track[];
+
+    it('should update record without tracklist if MBID is not provided', async () => {
       const recordId = 'recordId123';
 
       const updates: UpdateRecordRequestDTO = { album: 'Updated Title' };
       const existingRecord = { ...recordData, _id: recordId } as Record;
       const updatedRecord = { ...existingRecord, ...updates } as Record;
 
-      jest
-        .spyOn(recordService, 'handleTracklistUpdate')
-        .mockResolvedValue(undefined);
       jest
         .spyOn(recordRepository, 'findById')
         .mockResolvedValue(existingRecord);
@@ -176,36 +256,31 @@ describe('RecordService', () => {
       const result = await recordService.updateRecord(recordId, updates);
 
       expect(recordRepository.findById).toHaveBeenCalledWith(recordId);
-      expect(recordService.handleTracklistUpdate).not.toHaveBeenCalled();
       expect(recordRepository.update).toHaveBeenCalledWith(recordId, updates);
+      expect(recordCache.getTracklist).not.toHaveBeenCalled();
+      expect(musicBrainzService.fetchTrackList).not.toHaveBeenCalled();
+      expect(recordCache.setTracklist).not.toHaveBeenCalled();
       expect(recordCache.clearRecords).toHaveBeenCalled();
       expect(result).toEqual(asApiResponse(updatedRecord));
     });
 
-    it('should update record and tracklist if MBID is provided', async () => {
+    it('should update record and tracklist if valid MBID is provided', async () => {
       const recordId = 'recordId123';
       const mbid = 'mbid-12345';
-      const updates = { album: 'Updated Title' };
       const updateRecordDTO = { mbid, album: 'Updated Title' };
 
+      const updates = { ...updateRecordDTO, tracklist: mockTracklist };
       const existingRecord = { ...recordData, _id: recordId } as Record;
       const updatedRecord = { ...existingRecord, ...updates } as Record;
-      const newTracklist = [
-        {
-          title: 'Track 1',
-          length: 180000,
-          position: 1,
-          firstReleaseDate: '2009-01-01',
-        },
-      ] as Track[];
 
       jest
         .spyOn(recordRepository, 'findById')
         .mockResolvedValue(existingRecord);
       jest.spyOn(recordRepository, 'update').mockResolvedValue(updatedRecord);
+      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
       jest
-        .spyOn(recordService, 'handleTracklistUpdate')
-        .mockResolvedValue(newTracklist);
+        .spyOn(musicBrainzService, 'fetchTrackList')
+        .mockResolvedValue(mockTracklist);
 
       const result = await recordService.updateRecord(
         recordId,
@@ -213,17 +288,85 @@ describe('RecordService', () => {
       );
 
       expect(recordRepository.findById).toHaveBeenCalledWith(recordId);
-      expect(recordService.handleTracklistUpdate).toHaveBeenCalledWith(
-        recordId,
-        mbid,
-      );
       expect(recordRepository.update).toHaveBeenCalledWith(recordId, updates);
+      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
+      expect(musicBrainzService.fetchTrackList).toHaveBeenCalledWith(mbid);
+      expect(recordCache.setTracklist).toHaveBeenCalled();
       expect(recordCache.clearRecords).toHaveBeenCalled();
 
-      expect(result.data.tracklist).toEqual(newTracklist);
+      expect(result.data.tracklist).toEqual(mockTracklist);
       expect(result).toEqual(
-        asApiResponse({ ...updatedRecord, tracklist: newTracklist }),
+        asApiResponse({ ...updatedRecord, tracklist: mockTracklist }),
       );
+    });
+
+    it('should fetch cached tracklist if it exists and update record if valid MBID is provided', async () => {
+      const recordId = 'recordId123';
+      const mbid = 'mbid-12345';
+      const updateRecordDTO = { mbid, album: 'Updated Title' };
+
+      const updates = { ...updateRecordDTO, tracklist: mockTracklist };
+      const existingRecord = { ...recordData, _id: recordId } as Record;
+      const updatedRecord = { ...existingRecord, ...updates } as Record;
+
+      jest
+        .spyOn(recordRepository, 'findById')
+        .mockResolvedValue(existingRecord);
+      jest.spyOn(recordRepository, 'update').mockResolvedValue(updatedRecord);
+      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(mockTracklist);
+
+      const result = await recordService.updateRecord(
+        recordId,
+        updateRecordDTO,
+      );
+
+      expect(recordRepository.findById).toHaveBeenCalledWith(recordId);
+      expect(recordRepository.update).toHaveBeenCalledWith(recordId, updates);
+      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
+      expect(musicBrainzService.fetchTrackList).not.toHaveBeenCalled();
+      expect(recordCache.setTracklist).not.toHaveBeenCalled();
+      expect(recordCache.clearRecords).toHaveBeenCalled();
+
+      expect(result.data.tracklist).toEqual(mockTracklist);
+      expect(result).toEqual(
+        asApiResponse({ ...updatedRecord, tracklist: mockTracklist }),
+      );
+    });
+
+    it('should update record without mbid and tracklist if invalid MBID is provided', async () => {
+      const recordId = 'recordId123';
+      const mbid = 'mbid-invalid';
+      const updateRecordDTO = { mbid, album: 'Updated Title' };
+
+      const updates = { album: 'Updated Title' };
+      const existingRecord = {
+        ...recordData,
+        _id: recordId,
+        tracklist: [],
+      } as Record;
+      const updatedRecord = { ...existingRecord, ...updates } as Record;
+
+      jest
+        .spyOn(recordRepository, 'findById')
+        .mockResolvedValue(existingRecord);
+      jest.spyOn(recordRepository, 'update').mockResolvedValue(updatedRecord);
+      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
+      jest.spyOn(musicBrainzService, 'fetchTrackList').mockResolvedValue([]);
+
+      const result = await recordService.updateRecord(
+        recordId,
+        updateRecordDTO,
+      );
+
+      expect(recordRepository.findById).toHaveBeenCalledWith(recordId);
+      expect(recordRepository.update).toHaveBeenCalledWith(recordId, updates);
+      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
+      expect(musicBrainzService.fetchTrackList).toHaveBeenCalledWith(mbid);
+      expect(recordCache.setTracklist).not.toHaveBeenCalled();
+      expect(recordCache.clearRecords).toHaveBeenCalled();
+
+      expect(result.data.tracklist).toEqual(updatedRecord.tracklist);
+      expect(result).toEqual(asApiResponse(updatedRecord));
     });
 
     it('should throw NotFoundException if record is not found', async () => {
@@ -334,78 +477,6 @@ describe('RecordService', () => {
         InternalServerErrorException,
       );
 
-      expect(Logger.prototype.error).toHaveBeenCalled();
-    });
-  });
-
-  describe('handleTracklistUpdate', () => {
-    const recordId = 'recordId123';
-    const mbid = 'mbid-12345';
-    const mockTracklist = [
-      {
-        title: 'Track 1',
-        length: 180000,
-        position: 1,
-        firstReleaseDate: '2009-01-01',
-      },
-    ] as Track[];
-
-    it('should fetch tracklist from cache and update the record', async () => {
-      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(mockTracklist);
-
-      await recordService.handleTracklistUpdate(recordId, mbid);
-
-      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
-      expect(musicBrainzService.fetchTrackList).not.toHaveBeenCalled();
-      expect(recordRepository.update).toHaveBeenCalledWith(recordId, {
-        mbid,
-        tracklist: mockTracklist,
-      });
-    });
-
-    it('should fetch tracklist from MusicBrainz and update cache if not in cache', async () => {
-      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
-      jest
-        .spyOn(musicBrainzService, 'fetchTrackList')
-        .mockResolvedValue(mockTracklist);
-
-      await recordService.handleTracklistUpdate(recordId, mbid);
-
-      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
-      expect(musicBrainzService.fetchTrackList).toHaveBeenCalledWith(mbid);
-      expect(recordCache.setTracklist).toHaveBeenCalledWith(
-        mbid,
-        mockTracklist,
-      );
-      expect(recordRepository.update).toHaveBeenCalledWith(recordId, {
-        mbid,
-        tracklist: mockTracklist,
-      });
-    });
-
-    it('should not update the cache and return empty array if mbid is not found on MusicBrainz', async () => {
-      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
-      jest.spyOn(musicBrainzService, 'fetchTrackList').mockResolvedValue([]);
-
-      await recordService.handleTracklistUpdate(recordId, mbid);
-
-      expect(recordCache.getTracklist).toHaveBeenCalledWith(mbid);
-      expect(musicBrainzService.fetchTrackList).toHaveBeenCalledWith(mbid);
-      expect(recordCache.setTracklist).not.toHaveBeenCalled();
-      expect(recordRepository.update).not.toHaveBeenCalled();
-    });
-
-    it('should log appropriately if an error is encountered', async () => {
-      jest.spyOn(recordCache, 'getTracklist').mockResolvedValue(null);
-      jest
-        .spyOn(musicBrainzService, 'fetchTrackList')
-        .mockResolvedValue(mockTracklist);
-      jest
-        .spyOn(recordRepository, 'update')
-        .mockRejectedValue(new Error('Encountered error'));
-      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
-
-      await recordService.handleTracklistUpdate(recordId, mbid);
       expect(Logger.prototype.error).toHaveBeenCalled();
     });
   });

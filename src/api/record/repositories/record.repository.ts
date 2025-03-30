@@ -71,7 +71,7 @@ export class RecordRepository {
   }
 
   async deleteMany(): Promise<void> {
-    await this.recordModel.deleteMany()
+    await this.recordModel.deleteMany();
   }
 
   async startSession() {

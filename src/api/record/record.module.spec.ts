@@ -37,7 +37,7 @@ describe('RecordModule', () => {
       .overrideProvider(RedisService)
       .useValue({
         set: jest.fn(),
-        get: jest.fn()
+        get: jest.fn(),
       })
       .compile();
   });
@@ -71,7 +71,8 @@ describe('RecordModule', () => {
   });
 
   it('should resolve MusicBrainzService', async () => {
-    const musicBrainzService = module.get<MusicBrainzService>(MusicBrainzService);
+    const musicBrainzService =
+      module.get<MusicBrainzService>(MusicBrainzService);
     expect(musicBrainzService).toBeDefined();
   });
 });

@@ -56,12 +56,12 @@ export class OrderService extends BaseService {
       await this.recordCache.clearRecords();
 
       await session.commitTransaction();
-      session.endSession();
+      await session.endSession();
 
       return asApiResponse(order);
     } catch (error) {
       await session.abortTransaction();
-      session.endSession();
+      await session.endSession();
 
       if (
         error instanceof NotFoundException ||

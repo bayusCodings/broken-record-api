@@ -37,15 +37,12 @@ export class RecordService extends BaseService {
   ): Promise<ApiResponseDTO<Record>> {
     try {
       const { mbid, ...recordData } = request;
-      const record = await this.recordRepository.create(recordData);
+      const tracklist = mbid ? await this.getOrFetchTracklist(mbid) : [];
 
-      if (mbid) {
-        const tracklist = await this.handleTracklistUpdate(
-          record._id.toString(),
-          mbid,
-        );
-        record.tracklist = tracklist;
-      }
+      const record = await this.recordRepository.create({
+        ...recordData,
+        ...(tracklist.length && { mbid, tracklist }),
+      });
 
       await this.recordCache.clearRecords();
       return asApiResponse(record);
@@ -67,16 +64,20 @@ export class RecordService extends BaseService {
     request: UpdateRecordRequestDTO,
   ): Promise<ApiResponseDTO<Record>> {
     try {
+      const { mbid, ...updates } = request;
+
       const record = await this.recordRepository.findById(id);
       if (!record) throw new NotFoundException('Record not found');
 
-      const { mbid, ...updates } = request;
-      const updatedRecord = await this.recordRepository.update(id, updates);
-
+      let tracklist: Track[] = [];
       if (mbid && mbid !== record.mbid) {
-        const tracklist = await this.handleTracklistUpdate(id, mbid);
-        if (tracklist.length) updatedRecord.tracklist = tracklist;
+        tracklist = await this.getOrFetchTracklist(mbid);
       }
+
+      const updatedRecord = await this.recordRepository.update(id, {
+        ...updates,
+        ...(tracklist.length && { mbid, tracklist }),
+      });
 
       await this.recordCache.clearRecords();
       return asApiResponse(updatedRecord);
@@ -119,25 +120,6 @@ export class RecordService extends BaseService {
       throw new InternalServerErrorException(
         'An error occured while finding records',
       );
-    }
-  }
-
-  async handleTracklistUpdate(
-    recordId: string,
-    mbid: string,
-  ): Promise<Track[]> {
-    try {
-      const tracklist = await this.getOrFetchTracklist(mbid);
-      if (tracklist.length) {
-        await this.recordRepository.update(recordId, { mbid, tracklist });
-      }
-      return tracklist;
-    } catch (error) {
-      this.logger.error(
-        `[Failed to update tracklist for record ${recordId}] ${error.message}`,
-        error.stack,
-      );
-      return [];
     }
   }
 
